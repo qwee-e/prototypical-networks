@@ -4,7 +4,7 @@ from feasibility import main
 
 
 parser = argparse.ArgumentParser(
-    description='Run validation-only selective augmentation feasibility study'
+    description='Evaluate selective augmentation on validation or test episodes'
 )
 parser.add_argument(
     '--model.model_path', type=str,
@@ -54,10 +54,4 @@ if args['augmentation.min_scale'] <= 0:
     parser.error('--augmentation.min_scale must be positive.')
 if args['augmentation.max_scale'] < args['augmentation.min_scale']:
     parser.error('--augmentation.max_scale must be >= min_scale.')
-if args['data.split'] == 'test':
-    parser.error(
-        'This feasibility study must use the validation split. '
-        'Keep the test split untouched until the method is fixed.'
-    )
-
 main(args)
