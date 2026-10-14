@@ -1,5 +1,6 @@
 import os
 import json
+import random
 from functools import partial
 from tqdm import tqdm
 
@@ -32,9 +33,12 @@ def main(opt):
     opt['model.x_dim'] = list(map(int, opt['model.x_dim'].split(',')))
     opt['log.fields'] = opt['log.fields'].split(',')
 
-    torch.manual_seed(1234)
+    seed = opt['train.seed']
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
     if opt['data.cuda']:
-        torch.cuda.manual_seed(1234)
+        torch.cuda.manual_seed_all(seed)
 
     if opt['data.trainval']:
         data = data_utils.load(opt, ['trainval'])
