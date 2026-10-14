@@ -23,12 +23,18 @@ parser.add_argument(
 parser.add_argument('--augmentation.ratio', type=float, default=0.30)
 parser.add_argument('--augmentation.views', type=int, default=3)
 parser.add_argument(
-    '--augmentation.mode', choices=['random_affine', 'four_direction'],
+    '--augmentation.mode',
+    choices=['random_affine', 'four_direction', 'direction_subset'],
     default='random_affine'
 )
 parser.add_argument(
     '--fusion.mode', choices=['probability_mean', 'embedding_mean'],
     default='probability_mean'
+)
+parser.add_argument(
+    '--selection.metric',
+    choices=['entropy', 'max_probability', 'top2_margin'],
+    default='entropy'
 )
 parser.add_argument('--augmentation.max_rotation', type=float, default=0.0)
 parser.add_argument('--augmentation.min_scale', type=float, default=1.0)

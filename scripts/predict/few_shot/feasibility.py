@@ -118,6 +118,26 @@ def _translate_query(query, shift_x, shift_y):
     return translated
 
 
+def _random_direction_views(query, views, generator):
+    if not 1 <= views <= 4:
+        raise ValueError('direction_subset requires between 1 and 4 views.')
+    count = query.size(0)
+    directions = ((-1, 0), (1, 0), (0, -1), (0, 1))
+    order = torch.rand(count, 4, generator=generator).argsort(dim=1)
+    augmented_views = []
+    for view_index in range(views):
+        direction_ids = order[:, view_index].to(device=query.device)
+        augmented = torch.zeros_like(query)
+        for direction_id, (shift_x, shift_y) in enumerate(directions):
+            mask = direction_ids.eq(direction_id)
+            if mask.any():
+                augmented[mask] = _translate_query(
+                    query[mask], shift_x, shift_y
+                )
+        augmented_views.append(augmented)
+    return augmented_views
+
+
 def _augmented_embeddings(model, query, views, config, generator,
                           augmentation_mode):
     augmented_views = []
@@ -132,6 +152,10 @@ def _augmented_embeddings(model, query, views, config, generator,
             augmented_views.append(
                 _translate_query(query, shift_x, shift_y)
             )
+    elif augmentation_mode == 'direction_subset':
+        augmented_views = _random_direction_views(
+            query, views, generator
+        )
     else:
         raise ValueError('Unknown augmentation mode: {}'.format(
             augmentation_mode
@@ -186,10 +210,24 @@ def _prediction_transitions(base_probabilities, new_probabilities, targets):
     }
 
 
+def _uncertainty_scores(probabilities, metric):
+    if metric == 'entropy':
+        n_class = probabilities.size(1)
+        return -(probabilities.clamp_min(1e-12).log() *
+                 probabilities).sum(dim=1) / math.log(n_class)
+    if metric == 'max_probability':
+        return 1.0 - probabilities.max(dim=1).values
+    if metric == 'top2_margin':
+        top_two = probabilities.topk(2, dim=1).values
+        return 1.0 - (top_two[:, 0] - top_two[:, 1])
+    raise ValueError('Unknown uncertainty metric: {}'.format(metric))
+
+
 def _episode_metrics(model, sample, ratio, views, augmentation_config,
                      selection_generator, augmentation_generator,
                      augmentation_mode='random_affine',
-                     fusion_mode='probability_mean'):
+                     fusion_mode='probability_mean',
+                     selection_metric='entropy'):
     xs = sample['xs']
     xq = sample['xq']
     n_class = xs.size(0)
@@ -211,9 +249,11 @@ def _episode_metrics(model, sample, ratio, views, augmentation_config,
 
     count = query.size(0)
     selected_count = min(count, max(1, int(math.ceil(count * ratio))))
-    entropy = -(base_probabilities.clamp_min(1e-12).log() *
-                base_probabilities).sum(dim=1) / math.log(n_class)
-    uncertainty_indices = entropy.topk(selected_count).indices
+    entropy = _uncertainty_scores(base_probabilities, 'entropy')
+    uncertainty_scores = _uncertainty_scores(
+        base_probabilities, selection_metric
+    )
+    uncertainty_indices = uncertainty_scores.topk(selected_count).indices
     random_indices = torch.randperm(
         count, generator=selection_generator
     )[:selected_count].to(device=query.device)
@@ -251,6 +291,7 @@ def _episode_metrics(model, sample, ratio, views, augmentation_config,
         'selected_count': selected_count,
         'query_count': count,
         'mean_entropy': float(entropy.mean().item()),
+        'mean_selection_score': float(uncertainty_scores.mean().item()),
         'uncertainty_selected_baseline_error_rate': _selected_error_rate(
             base_probabilities, targets, uncertainty_indices
         ),
@@ -335,6 +376,7 @@ def _summarize(records, ratio, views):
 
     for field in (
         'mean_entropy',
+        'mean_selection_score',
         'uncertainty_selected_baseline_error_rate',
         'uncertainty_unselected_baseline_error_rate'
     ):
@@ -395,6 +437,7 @@ def main(opt):
     }
     augmentation_mode = opt['augmentation.mode']
     fusion_mode = opt['fusion.mode']
+    selection_metric = opt['selection.metric']
 
     config = {
         'model_path': opt['model.model_path'],
@@ -408,6 +451,7 @@ def main(opt):
         'extra_views': opt['augmentation.views'],
         'augmentation_mode': augmentation_mode,
         'fusion_mode': fusion_mode,
+        'selection_metric': selection_metric,
         'augmentation': augmentation_config,
         'model_parameters_updated': False,
         'torch_version': torch.__version__
@@ -430,7 +474,8 @@ def main(opt):
                 selection_generator=selection_generator,
                 augmentation_generator=augmentation_generator,
                 augmentation_mode=augmentation_mode,
-                fusion_mode=fusion_mode
+                fusion_mode=fusion_mode,
+                selection_metric=selection_metric
             )
             metrics['episode'] = episode_index
             records.append(metrics)

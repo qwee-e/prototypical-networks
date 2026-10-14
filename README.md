@@ -53,12 +53,11 @@ python scripts/predict/few_shot/run_feasibility.py \
   --data.query 15 \
   --data.episodes 1000 \
   --eval.seed 1234 \
-  --augmentation.ratio 0.30 \
-  --augmentation.views 3 \
-  --augmentation.max_rotation 0 \
-  --augmentation.min_scale 1 \
-  --augmentation.max_scale 1 \
-  --augmentation.max_translate 1
+  --augmentation.ratio 0.20 \
+  --augmentation.mode four_direction \
+  --augmentation.views 4 \
+  --fusion.mode probability_mean \
+  --selection.metric entropy
 ```
 
 Results are written to `results/uncertainty_5way_1shot/feasibility/` as the
@@ -66,6 +65,7 @@ resolved configuration, one JSON record per episode, and an aggregate summary.
 The feasibility entry point intentionally rejects the test split so that method
 choices are made using validation data only.
 
-The first feasibility run deliberately uses only a one-pixel translation. A
-20-episode validation smoke test showed that rotation and scaling substantially
-degraded this frozen model, which had been trained without those augmentations.
+The selected validation configuration uses four deterministic one-pixel
+translations and augments the 20% highest-entropy queries. Validation ablations
+showed that rotation and scaling substantially degraded this frozen model,
+while selection ratios above 20% produced no meaningful additional accuracy.
