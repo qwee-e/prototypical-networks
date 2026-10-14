@@ -67,7 +67,6 @@ def main(opt):
         for split, split_meters in meters.items():
             for field, meter in split_meters.items():
                 meter.reset()
-        state['scheduler'].step()
     engine.hooks['on_start_epoch'] = on_start_epoch
 
     def on_update(state):
@@ -117,7 +116,7 @@ def main(opt):
             torch.save(state['model'], os.path.join(opt['log.exp_dir'], 'best_model.pt'))
             if opt['data.cuda']:
                 state['model'].cuda()
-
+        state['scheduler'].step()
     engine.hooks['on_end_epoch'] = partial(on_end_epoch, { })
 
     engine.train(
