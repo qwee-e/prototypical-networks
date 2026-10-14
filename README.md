@@ -36,3 +36,36 @@ If you use this code, please cite our paper:
 ### Evaluate
 
 * Run evaluation as: `python scripts/predict/few_shot/run_eval.py --model.model_path results/trainval/best_model.pt`.
+
+### Run the validation-only selective augmentation feasibility study
+
+After training the frozen 5-way 1-shot baseline, compare the baseline, full
+augmentation, random 30% augmentation, and uncertainty-guided 30%
+augmentation on the same validation episodes without updating model
+parameters:
+
+```bash
+python scripts/predict/few_shot/run_feasibility.py \
+  --model.model_path results/baseline_5way_1shot/best_model.pt \
+  --data.split val \
+  --data.way 5 \
+  --data.shot 1 \
+  --data.query 15 \
+  --data.episodes 1000 \
+  --eval.seed 1234 \
+  --augmentation.ratio 0.30 \
+  --augmentation.views 3 \
+  --augmentation.max_rotation 0 \
+  --augmentation.min_scale 1 \
+  --augmentation.max_scale 1 \
+  --augmentation.max_translate 1
+```
+
+Results are written to `results/uncertainty_5way_1shot/feasibility/` as the
+resolved configuration, one JSON record per episode, and an aggregate summary.
+The feasibility entry point intentionally rejects the test split so that method
+choices are made using validation data only.
+
+The first feasibility run deliberately uses only a one-pixel translation. A
+20-episode validation smoke test showed that rotation and scaling substantially
+degraded this frozen model, which had been trained without those augmentations.
